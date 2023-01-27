@@ -2,24 +2,34 @@ import puppeteer from "puppeteer";
 var productsToReturn = []
 
 export default defineEventHandler( async (event) => {
+    //launches a new browser
     const browser = await puppeteer.launch({headless: false});
+    //creating a new page
     const page = await browser.newPage();
 
+    //reading the term passed in the event and storing it in a variable
     const { term } = await readBody(event);
 
+    
+    //navigating to the search term on amazon's website
     await page.goto("https://www.amazon.com/" + term + "/s?k=" + term);
     
+    //calling the scroll function
     await scroll(page)
 
     return {result: productsToReturn}
 });
 
+//scroll function that is used to scroll through the pages and scrape the data
 async function scroll(page) {
     try {
+      //while true loop that will continue until the next button is not found
         while (true) {
+          //page.evaluate is used to execute a function in the context of the page
           var productsEvaluate = await page.evaluate(async () => {
             const products = [];
-    
+            
+            //promise that will resolve once the page has finished scrolling
             await new Promise((resolve, reject) => {
               var totalHeight = 0;
               var distance = 100;
@@ -27,18 +37,21 @@ async function scroll(page) {
                 var scrollHeight = document.body.scrollHeight;
                 window.scrollBy(0, distance);
                 totalHeight += distance;
-    
+                
+              //if the total height of the page is greater or equal to the scroll height, stop scrolling
                 if (totalHeight >= scrollHeight) {
                   clearInterval(timer);
                   resolve();
                 }
               }, 100);
             });
-    
+            
+            //selecting all the product elements on the page
             const productsElement = document.querySelectorAll(
               '[data-csa-c-type="item"]'
             );
-    
+              
+            //iterating through the product elements
             for (let element of productsElement) {
               const product = {
                 date: Date.now(),
@@ -94,22 +107,27 @@ async function scroll(page) {
                 console.log('No image')
               }
     
+              // Add product to the list of products
               products.push(product);
             }
-    
+
+            // Return the list of products    
             return products;
           });
     
           console.log(productsEvaluate);
 
+          // Add the products returned by this iteration to the overall list of products
           productsToReturn = productsToReturn.concat(productsEvaluate)
 
           try {
+            // Click on the next button to go to the next page
             await page.click(
               '[class="s-pagination-item s-pagination-next s-pagination-button s-pagination-separator"]',
               { timeout: 1000 }
             );
           } catch (error) {
+            // If there's no next button, exit the loop
             console.log("No next button")
             break
           }
